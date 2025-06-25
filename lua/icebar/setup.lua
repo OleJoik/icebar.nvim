@@ -1,25 +1,28 @@
-print("hello from icebar")
-ENABLE = true
+local M = {}
 
-vim.api.nvim_create_user_command("IceBar", function()
-  print(vim.inspect(require("icebar").state()))
-end, {})
+function M.setup(cfg)
+  if cfg.enabled == false then
+    return
+  end
 
-vim.api.nvim_create_user_command("IceBarCloseBuf", function()
-  local win_id = vim.api.nvim_get_current_win()
-  local buf_id = vim.api.nvim_get_current_buf()
-  require("icebar").close_buf(win_id, buf_id)
-end, {})
+  vim.api.nvim_create_user_command("IceBar", function()
+    print(vim.inspect(require("icebar").state()))
+  end, {})
 
-vim.api.nvim_create_user_command("IceBarRender", function()
-  require("icebar").render()
-end, {})
+  vim.api.nvim_create_user_command("IceBarCloseBuf", function()
+    local win_id = vim.api.nvim_get_current_win()
+    local buf_id = vim.api.nvim_get_current_buf()
+    require("icebar").close_buf(win_id, buf_id)
+  end, {})
 
-vim.api.nvim_create_user_command("IceBarMoveCurrentBufRight", function()
-  require("icebar").move_current_buf("right")
-end, {})
+  vim.api.nvim_create_user_command("IceBarRender", function()
+    require("icebar").render()
+  end, {})
 
-if ENABLE then
+  vim.api.nvim_create_user_command("IceBarMoveCurrentBufRight", function()
+    require("icebar").move_current_buf("right")
+  end, {})
+
   -- BufWinEnter doesnt trigger on :split, therefore also WinNew:
   vim.api.nvim_create_autocmd({ "BufWinEnter", "WinNew" }, {
     callback = function(e)
@@ -64,3 +67,5 @@ if ENABLE then
     end,
   })
 end
+
+return M

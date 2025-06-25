@@ -6,6 +6,28 @@ local M = {}
 
 ---@type State
 M._state = { windows = {} }
+M._config = {
+  enabled = false,
+  skip_filetypes = {
+    ["oil"] = true,
+    ["NvimTree"] = true,
+    ["neo-tree"] = true,
+    ["toggleterm"] = true,
+    ["alpha"] = true,
+    ["lazy"] = true,
+    ["Outline"] = true,
+    ["fugitive"] = true,
+    ["qf"] = true,
+    ["help"] = true,
+  },
+  float_row_offset = 1,
+  float_col_offset = 2,
+}
+
+function M.setup(user_config)
+  M._config = vim.tbl_deep_extend("force", M._config, user_config or {})
+  require("icebar.setup").setup(M._config)
+end
 
 function M.state()
   return M._state
@@ -38,20 +60,8 @@ local function _is_normal_buffer(bufnr)
   end
 
   local filetype = vim.bo[bufnr].filetype
-  local skip_filetypes = {
-    ["oil"] = true,
-    ["NvimTree"] = true,
-    ["neo-tree"] = true,
-    ["toggleterm"] = true,
-    ["alpha"] = true,
-    ["lazy"] = true,
-    ["Outline"] = true,
-    ["fugitive"] = true,
-    ["qf"] = true,
-    ["help"] = true,
-  }
 
-  if skip_filetypes[filetype] then
+  if M._config.skip_filetypes[filetype] then
     return false
   end
 
@@ -72,8 +82,8 @@ function M._create_float(win_id)
     relative = "win",
     win = win_id,
     anchor = "NE",
-    row = -1,
-    col = parent_width - 2,
+    row = -M._config.float_row_offset,
+    col = parent_width - M._config.float_col_offset,
     width = 1,
     height = 1,
     focusable = false,
@@ -93,6 +103,10 @@ function M._create_float(win_id)
 end
 
 function M.register(win_id, buf_id)
+  if not M._config.enabled then
+    return
+  end
+
   if _is_normal_window(win_id) == false then
     return
   end
