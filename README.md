@@ -8,13 +8,13 @@ Written on vacation in Iceland, thus icebar.
 
 Lazy:
 
-```
+```lua
 { "OleJoik/icebar.nvim", opts = { enabled = true } }
 ```
 
 ## Default configuration
 
-```
+```lua
 {
   enabled = false,
   skip_filetypes = {
