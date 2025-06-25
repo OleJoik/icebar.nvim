@@ -1,4 +1,4 @@
----@alias BufferState { active: boolean, filename: string, order: number }
+---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number }
 ---@alias FloatState { win_id: integer, buffer: integer }
 ---@alias WindowState { buffers: table<string, BufferState|nil>, float: FloatState|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
@@ -125,9 +125,13 @@ function M.register(win_id, buf_id)
 
   if M._state.windows[w] == nil then
     local float = M._create_float(win_id)
-    M._state.windows[w] = { buffers = { [b] = { active = true, filename = filename, order = 0 } }, float = float }
+    M._state.windows[w] = {
+      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0 } },
+      float =
+          float
+    }
   else
-    M._state.windows[w].buffers[b] = { active = true, filename = filename, order = 0 }
+    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = 0 }
   end
 
   M._set_active(w, b)
@@ -210,7 +214,7 @@ function M.render()
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       if buf.order > 1 then
-        table.insert(bufs, { order = buf.order, filename = buf.filename })
+        table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename })
       end
     end
 
@@ -226,10 +230,20 @@ function M.render()
     local highlights = {}
     for _, buf in ipairs(bufs) do
       if i > max_tabs then break end
-
+      local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf.buf_id })
       local start_col = #buf_filenames
-      buf_filenames = buf_filenames .. "[ " .. buf.filename .. " ] "
-      table.insert(highlights, { start = start_col, stop = start_col + #buf.filename + 4 })
+      local highlight_end = start_col + #buf.filename + 4
+
+      buf_filenames = buf_filenames .. "[ " .. buf.filename
+
+      if is_modified then
+        buf_filenames = buf_filenames .. " +"
+        highlight_end = highlight_end + 2
+      end
+
+
+      buf_filenames = buf_filenames .. " ] "
+      table.insert(highlights, { start = start_col, stop = highlight_end })
 
       i = i + 1
     end
