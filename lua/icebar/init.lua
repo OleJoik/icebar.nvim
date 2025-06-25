@@ -22,6 +22,7 @@ M._config = {
   },
   float_row_offset = 1,
   float_col_offset = 2,
+  max_tabs = 3,
 }
 
 function M.setup(user_config)
@@ -226,10 +227,9 @@ function M.render()
 
 
     local i = 1
-    local max_tabs = 3
     local highlights = {}
     for _, buf in ipairs(bufs) do
-      if i > max_tabs then break end
+      if i > M._config.max_tabs then break end
       local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf.buf_id })
       local start_col = #buf_filenames
       local highlight_end = start_col + #buf.filename + 4
@@ -249,7 +249,7 @@ function M.render()
     end
 
 
-    if #bufs > max_tabs then
+    if #bufs > M._config.max_tabs then
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. "[ ... ]"
       table.insert(highlights, { start = start_col, stop = start_col + start_col + 7 })
