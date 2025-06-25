@@ -369,7 +369,7 @@ function M.move_current_buf(direction)
     if M.is_window_registered(new_win) then
       local buffers_in_new_win = M.buffers_in_window(new_win)
       local buffers_in_old_win = M.buffers_in_window(old_win)
-      -- when moving the first buffer to a new window, will keep split
+      -- when moving the first buffer to a new window, will keep split. Otherwise, collapse
       if buffers_in_new_win ~= nil and buffers_in_new_win > 0 and buffers_in_old_win == 1 then
         should_close_window = true
       end
