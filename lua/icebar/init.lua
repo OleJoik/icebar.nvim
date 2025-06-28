@@ -1,6 +1,6 @@
----@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number }
+---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string }
 ---@alias FloatState { win_id: integer, buffer: integer }
----@alias WindowState { buffers: table<string, BufferState|nil>, float: FloatState|nil }
+---@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
 local M = {}
 
@@ -9,7 +9,6 @@ M._state = { windows = {} }
 M._config = {
   enabled = false,
   skip_filetypes = {
-    ["oil"] = true,
     ["NvimTree"] = true,
     ["neo-tree"] = true,
     ["toggleterm"] = true,
@@ -20,7 +19,7 @@ M._config = {
     ["qf"] = true,
     ["help"] = true,
   },
-  float_row_offset = 1,
+  float_row_offset = -1,
   float_col_offset = 2,
   max_tabs = 3,
 }
@@ -75,17 +74,19 @@ local function _is_normal_window(win_id)
 end
 
 function M._create_float(win_id)
-  local float_buf = vim.api.nvim_create_buf(false, true) -- [listed=false, scratch=true]
-  local parent_width = vim.api.nvim_win_get_width(win_id)
+  local float_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, {})
+
+  local wininfo = vim.fn.getwininfo(win_id)
+  local textoff = wininfo[1].textoff
 
   local float_win = vim.api.nvim_open_win(float_buf, false, {
     relative = "win",
     win = win_id,
-    anchor = "NE",
-    row = -M._config.float_row_offset,
-    col = parent_width - M._config.float_col_offset,
-    width = 1,
+    anchor = "NW",
+    row = M._config.float_row_offset,
+    col = textoff,
+    width = vim.api.nvim_win_get_width(win_id) - textoff - 2,
     height = 1,
     focusable = false,
     style = "minimal",
@@ -127,12 +128,12 @@ function M.register(win_id, buf_id)
   if M._state.windows[w] == nil then
     local float = M._create_float(win_id)
     M._state.windows[w] = {
-      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0 } },
-      float =
-          float
+      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name } },
+      float = float,
+      win_id = win_id
     }
   else
-    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = 0 }
+    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name }
   end
 
   M._set_active(w, b)
@@ -194,62 +195,87 @@ function M._set_active(w, b)
   M.render()
 end
 
-function M.update_float_position(win_id)
-  local w = tostring(win_id)
-  if M._state.windows[w] == nil then
-    return
-  end
-
-  local parent_width = vim.api.nvim_win_get_width(win_id)
-  local float_id = M._state.windows[w].float.win_id
-  if float_id == nil then
-    return
-  end
-  local cfg = vim.api.nvim_win_get_config(float_id)
-  cfg.col = parent_width
-  vim.api.nvim_win_set_config(M._state.windows[w].float.win_id, cfg)
-end
-
 function M.render()
   for _, window in pairs(M._state.windows) do
     local bufs = {}
     for _, buf in pairs(window.buffers) do
-      if buf.order > 1 then
-        table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename })
-      end
+      table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
     end
 
     table.sort(bufs, function(x, y)
       return x.order < y.order
     end)
 
-    local buf_filenames = ""
-
-
-    local i = 1
     local highlights = {}
-    for _, buf in ipairs(bufs) do
-      if i > M._config.max_tabs then break end
-      local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf.buf_id })
-      local start_col = #buf_filenames
-      local highlight_end = start_col + #buf.filename + 4
 
-      buf_filenames = buf_filenames .. "[ " .. buf.filename
+    local buf_filenames = ""
+    if #bufs > 0 then
+      local first = bufs[1]
+
+      local cwd = vim.fn.getcwd()
+      local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
+
+      local oil_path = vim.fn.fnamemodify(first.path, '%:p'):gsub("^oil://", "")
+      local rel_path = vim.fn.fnamemodify(oil_path, ':~:.')
+
+      if not rel_path:match("^[/~]") and rel_path ~= "" then
+        rel_path = "/" .. rel_path
+      end
+      if rel_path == '' or rel_path == '.' then
+        rel_path = ''
+      end
+
+      if not rel_path:match("^[/~]") and rel_path ~= "" then
+        rel_path = "/" .. rel_path
+      end
+      if rel_path == '' or rel_path == '.' then
+        rel_path = ''
+      end
+
+      local start_col = #buf_filenames
+      local is_modified = vim.api.nvim_get_option_value("modified", { buf = first.buf_id })
+      local shown_filepath = "[ " .. cwd_basename .. rel_path
+
+      buf_filenames = buf_filenames .. shown_filepath
+      local highlight_end = start_col + #shown_filepath + 4
 
       if is_modified then
         buf_filenames = buf_filenames .. " +"
         highlight_end = highlight_end + 2
       end
 
-
       buf_filenames = buf_filenames .. " ] "
       table.insert(highlights, { start = start_col, stop = highlight_end })
+    end
 
-      i = i + 1
+    local i = 0
+
+    for _, buf in ipairs(bufs) do
+      if buf.order > 1 then
+        if i > M._config.max_tabs then break end
+
+        if buf.filename ~= "" then -- This filters out temporary buffers such as oils buffers (without a name)
+          local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf.buf_id })
+          local start_col = #buf_filenames
+          local highlight_end = start_col + #buf.filename + 4
+
+          buf_filenames = buf_filenames .. "[ " .. buf.filename
+
+          if is_modified then
+            buf_filenames = buf_filenames .. " +"
+            highlight_end = highlight_end + 2
+          end
+
+
+          buf_filenames = buf_filenames .. " ] "
+          table.insert(highlights, { start = start_col, stop = highlight_end })
+          i = i + 1
+        end
+      end
     end
 
 
-    if #bufs > M._config.max_tabs then
+    if i > M._config.max_tabs then
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. "[ ... ]"
       table.insert(highlights, { start = start_col, stop = start_col + start_col + 7 })
@@ -259,12 +285,11 @@ function M.render()
 
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
-    local column_width = string.len(buf_filenames)
-    if column_width > 0 then
-      cfg.width = vim.fn.strdisplaywidth(buf_filenames)
-    else
-      cfg.width = 1
-    end
+    local wininfo = vim.fn.getwininfo(window.win_id)
+    local textoff = wininfo[1].textoff
+    cfg.width = vim.api.nvim_win_get_width(window.win_id) - textoff - 2
+
+    cfg.col = textoff
 
     if vim.api.nvim_win_is_valid(window.float.win_id) then
       vim.api.nvim_win_set_config(window.float.win_id, cfg)

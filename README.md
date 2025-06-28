@@ -4,6 +4,10 @@ A plugin with a bar for managing which buffers belong in which window.
 
 Written on vacation in Iceland, thus icebar.
 
+## Known limitations
+
+- Buggy with netrw
+
 ## Install
 
 Lazy:
@@ -18,7 +22,6 @@ Lazy:
 {
   enabled = false,
   skip_filetypes = {
-    ["oil"] = true,
     ["NvimTree"] = true,
     ["neo-tree"] = true,
     ["toggleterm"] = true,
@@ -50,4 +53,11 @@ vim.keymap.set("n", "<leader>l", function() move_buf("right") end, opts)
 
 vim.keymap.set("n", "<Tab>", function() require("icebar").toggle_buffer_in_window() end, opts)
 vim.keymap.set("n", "<C-x>", function() require("icebar").close_buf() end, opts)
+```
+
+## Development
+
+To run neovim in a clean slate
+```
+nvim --clean -u local/nvim.lua .
 ```
