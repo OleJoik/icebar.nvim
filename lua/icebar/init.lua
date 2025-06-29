@@ -21,6 +21,7 @@ M._config = {
   },
   float_row_offset = -1,
   float_col_offset = 2,
+  padding_left = 10,
   max_tabs = 3,
   underline = "#587b7b",
   tab_guifg = "#587b7b",
@@ -80,9 +81,6 @@ end
 function M._create_float(win_id)
   local float_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, {})
-
-  local wininfo = vim.fn.getwininfo(win_id)
-  local textoff = wininfo[1].textoff
 
   local float_win = vim.api.nvim_open_win(float_buf, false, {
     relative = "win",
@@ -202,7 +200,6 @@ end
 function M.render()
   for _, window in pairs(M._state.windows) do
     local wininfo = vim.fn.getwininfo(window.win_id)
-    local textoff = wininfo[1].textoff
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
@@ -214,7 +211,7 @@ function M.render()
 
     local highlights = {}
 
-    local buf_filenames = (" "):rep(textoff)
+    local buf_filenames = (" "):rep(M._config.padding_left)
     if #bufs > 0 then
       local first = bufs[1]
 
