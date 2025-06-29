@@ -13,27 +13,32 @@ Written on vacation in Iceland, thus icebar.
 Lazy:
 
 ```lua
-{ "OleJoik/icebar.nvim", opts = { enabled = true } }
+{ "OleJoik/icebar.nvim", opts = {} }
 ```
 
 ## Default configuration
 
 ```lua
 {
-  enabled = false,
   skip_filetypes = {
-    ["NvimTree"] = true,
-    ["neo-tree"] = true,
-    ["toggleterm"] = true,
-    ["alpha"] = true,
-    ["lazy"] = true,
-    ["Outline"] = true,
-    ["fugitive"] = true,
-    ["qf"] = true,
-    ["help"] = true,
+    "NvimTree",
+    "neo-tree",
+    "toggleterm",
+    "alpha",
+    "lazy",
+    "Outline",
+    "fugitive",
+    "qf",
+    "help",
   },
-  float_row_offset = 1,
+  float_row_offset = -1,
   float_col_offset = 2,
+  padding_left = 10,
+  max_tabs = 3,
+  underline = "#587b7b",
+  tab_guifg = "#587b7b",
+  tab_guibg = "#1d3337",
+  bg_guibg = "#152528",
 }
 ```
 

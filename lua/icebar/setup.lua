@@ -1,10 +1,6 @@
 local M = {}
 
 function M.setup(cfg)
-  if cfg.enabled == false then
-    return
-  end
-
   local tab_hl_cmd = "highlight IceBarTab guifg=" .. cfg.tab_guifg .. " guibg=" .. cfg.tab_guibg .. " gui=bold"
   local tab_bg_cmd = "highlight IceBarBackground guifg=" .. cfg.tab_guibg .. " guibg=" .. cfg.bg_guibg .. " gui=bold"
 

@@ -7,17 +7,16 @@ local M = {}
 ---@type State
 M._state = { windows = {} }
 M._config = {
-  enabled = false,
   skip_filetypes = {
-    ["NvimTree"] = true,
-    ["neo-tree"] = true,
-    ["toggleterm"] = true,
-    ["alpha"] = true,
-    ["lazy"] = true,
-    ["Outline"] = true,
-    ["fugitive"] = true,
-    ["qf"] = true,
-    ["help"] = true,
+    "NvimTree",
+    "neo-tree",
+    "toggleterm",
+    "alpha",
+    "lazy",
+    "Outline",
+    "fugitive",
+    "qf",
+    "help",
   },
   float_row_offset = -1,
   float_col_offset = 2,
@@ -29,9 +28,17 @@ M._config = {
   bg_guibg = "#152528",
 }
 
+M._skip_filetypes = {}
+
 function M.setup(user_config)
   M._config = vim.tbl_deep_extend("force", M._config, user_config or {})
   require("icebar.setup").setup(M._config)
+
+
+  M._skip_filetypes = {}
+  for _, ft in ipairs(M._config.skip_filetypes) do
+    M._skip_filetypes[ft] = true
+  end
 end
 
 function M.state()
@@ -66,7 +73,7 @@ local function _is_normal_buffer(bufnr)
 
   local filetype = vim.bo[bufnr].filetype
 
-  if M._config.skip_filetypes[filetype] then
+  if M._skip_filetypes[filetype] then
     return false
   end
 
@@ -107,10 +114,6 @@ function M._create_float(win_id)
 end
 
 function M.register(win_id, buf_id)
-  if not M._config.enabled then
-    return
-  end
-
   if _is_normal_window(win_id) == false then
     return
   end
