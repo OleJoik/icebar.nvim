@@ -48,7 +48,7 @@ Lazy:
   padding_left = 10,
   padding_right = 2,
   max_tabs = 3,
-  underline = "#587b7b",
+  underline = "#587b7b", -- color or nil
   tab_guifg = "#587b7b",
   tab_guibg = "#1d3337",
   bg_guibg = "#152528",
