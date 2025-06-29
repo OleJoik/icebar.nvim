@@ -22,6 +22,10 @@ M._config = {
   float_row_offset = -1,
   float_col_offset = 2,
   max_tabs = 3,
+  underline = "#587b7b",
+  tab_guifg = "#587b7b",
+  tab_guibg = "#1d3337",
+  bg_guibg = "#152528",
 }
 
 function M.setup(user_config)
@@ -85,8 +89,8 @@ function M._create_float(win_id)
     win = win_id,
     anchor = "NW",
     row = M._config.float_row_offset,
-    col = textoff,
-    width = vim.api.nvim_win_get_width(win_id) - textoff - 2,
+    col = 0,
+    width = vim.api.nvim_win_get_width(win_id),
     height = 1,
     focusable = false,
     style = "minimal",
@@ -197,6 +201,8 @@ end
 
 function M.render()
   for _, window in pairs(M._state.windows) do
+    local wininfo = vim.fn.getwininfo(window.win_id)
+    local textoff = wininfo[1].textoff
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
@@ -208,7 +214,7 @@ function M.render()
 
     local highlights = {}
 
-    local buf_filenames = ""
+    local buf_filenames = (" "):rep(textoff)
     if #bufs > 0 then
       local first = bufs[1]
 
@@ -225,26 +231,19 @@ function M.render()
         rel_path = ''
       end
 
-      if not rel_path:match("^[/~]") and rel_path ~= "" then
-        rel_path = "/" .. rel_path
-      end
-      if rel_path == '' or rel_path == '.' then
-        rel_path = ''
-      end
-
       local start_col = #buf_filenames
       local is_modified = vim.api.nvim_get_option_value("modified", { buf = first.buf_id })
-      local shown_filepath = "[ " .. cwd_basename .. rel_path
+      local shown_filepath = "  " .. cwd_basename .. rel_path
 
       buf_filenames = buf_filenames .. shown_filepath
-      local highlight_end = start_col + #shown_filepath + 4
+      local highlight_end = start_col + #shown_filepath + 2
 
       if is_modified then
         buf_filenames = buf_filenames .. " +"
         highlight_end = highlight_end + 2
       end
 
-      buf_filenames = buf_filenames .. " ] "
+      buf_filenames = buf_filenames .. "   "
       table.insert(highlights, { start = start_col, stop = highlight_end })
     end
 
@@ -259,7 +258,7 @@ function M.render()
           local start_col = #buf_filenames
           local highlight_end = start_col + #buf.filename + 4
 
-          buf_filenames = buf_filenames .. "[ " .. buf.filename
+          buf_filenames = buf_filenames .. "  " .. buf.filename
 
           if is_modified then
             buf_filenames = buf_filenames .. " +"
@@ -267,7 +266,7 @@ function M.render()
           end
 
 
-          buf_filenames = buf_filenames .. " ] "
+          buf_filenames = buf_filenames .. "   "
           table.insert(highlights, { start = start_col, stop = highlight_end })
           i = i + 1
         end
@@ -283,18 +282,20 @@ function M.render()
       buf_filenames = buf_filenames:sub(1, -2)
     end
 
+    local width = vim.api.nvim_win_get_width(window.win_id)
+    buf_filenames = buf_filenames .. (" "):rep(width - #buf_filenames)
+
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
-    local wininfo = vim.fn.getwininfo(window.win_id)
-    local textoff = wininfo[1].textoff
-    cfg.width = vim.api.nvim_win_get_width(window.win_id) - textoff - 2
+    cfg.width = width
 
-    cfg.col = textoff
 
+
+    vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarBackground", 0, 0, -1)
     if vim.api.nvim_win_is_valid(window.float.win_id) then
       vim.api.nvim_win_set_config(window.float.win_id, cfg)
       for _, hl in ipairs(highlights) do
-        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "WinBarNC", 0, hl.start, hl.stop)
+        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarTab", 0, hl.start, hl.stop)
       end
     end
   end

@@ -5,6 +5,19 @@ function M.setup(cfg)
     return
   end
 
+  local tab_hl_cmd = "highlight IceBarTab guifg=" .. cfg.tab_guifg .. " guibg=" .. cfg.tab_guibg .. " gui=bold"
+  local tab_bg_cmd = "highlight IceBarBackground guifg=" .. cfg.tab_guibg .. " guibg=" .. cfg.bg_guibg .. " gui=bold"
+
+
+  if cfg.underline ~= nil then
+    tab_hl_cmd = tab_hl_cmd .. ",underline guisp=" .. cfg.underline
+    tab_bg_cmd = tab_bg_cmd .. ",underline guisp=" .. cfg.underline
+  end
+
+  vim.cmd(tab_hl_cmd)
+  vim.cmd(tab_bg_cmd)
+
+
   vim.api.nvim_create_user_command("IceBar", function()
     print(vim.inspect(require("icebar").state()))
   end, {})
@@ -73,7 +86,7 @@ function M.setup(cfg)
   })
 
 
-  vim.api.nvim_create_autocmd({ "WinResized" }, {
+  vim.api.nvim_create_autocmd({ "WinResized", "BufEnter" }, {
     callback = function()
       require("icebar").render()
       -- local windows = vim.v.event.windows or {}
