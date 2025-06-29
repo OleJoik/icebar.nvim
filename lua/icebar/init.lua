@@ -21,11 +21,15 @@ M._config = {
   float_row_offset = -1,
   float_col_offset = 2,
   padding_left = 10,
+  padding_right = 2,
   max_tabs = 3,
   underline = "#587b7b",
   tab_guifg = "#587b7b",
   tab_guibg = "#1d3337",
   bg_guibg = "#152528",
+  current_file = "left",       -- left or right
+  newest_other_file = "right", -- left or right
+  space = "center",            -- left, right or center
 }
 
 M._skip_filetypes = {}
@@ -97,7 +101,7 @@ function M._create_float(win_id)
     col = 0,
     width = vim.api.nvim_win_get_width(win_id),
     height = 1,
-    focusable = false,
+    focusable = true,
     style = "minimal",
     border = "none"
   })
@@ -202,7 +206,6 @@ end
 
 function M.render()
   for _, window in pairs(M._state.windows) do
-    local wininfo = vim.fn.getwininfo(window.win_id)
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
@@ -212,11 +215,11 @@ function M.render()
       return x.order < y.order
     end)
 
-    local highlights = {}
 
-    local buf_filenames = (" "):rep(M._config.padding_left)
+    local current_file = nil
     if #bufs > 0 then
       local first = bufs[1]
+      table.remove(bufs, 1)
 
       local cwd = vim.fn.getcwd()
       local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
@@ -231,65 +234,109 @@ function M.render()
         rel_path = ''
       end
 
-      local start_col = #buf_filenames
       local is_modified = vim.api.nvim_get_option_value("modified", { buf = first.buf_id })
-      local shown_filepath = "  " .. cwd_basename .. rel_path
-
-      buf_filenames = buf_filenames .. shown_filepath
-      local highlight_end = start_col + #shown_filepath + 2
+      current_file = "  " .. cwd_basename .. rel_path
 
       if is_modified then
-        buf_filenames = buf_filenames .. " +"
-        highlight_end = highlight_end + 2
+        current_file = current_file .. " +"
       end
 
-      buf_filenames = buf_filenames .. "   "
-      table.insert(highlights, { start = start_col, stop = highlight_end })
+      current_file = current_file .. "  "
     end
+
+    table.sort(bufs, function(x, y)
+      if M._config.newest_other_file == "left" then
+        return x.order < y.order
+      elseif M._config.newest_other_file == "right" then
+        return x.order > y.order
+      else
+        error("newest_other_file must be 'left' or 'right'")
+      end
+    end)
 
     local i = 0
+    local other_filenames = ""
+    local other_highlights = {}
 
     for _, buf in ipairs(bufs) do
-      if buf.order > 1 then
-        if i > M._config.max_tabs then break end
+      if i > M._config.max_tabs then break end
 
-        if buf.filename ~= "" then -- This filters out temporary buffers such as oils buffers (without a name)
-          local is_modified = vim.api.nvim_get_option_value("modified", { buf = buf.buf_id })
-          local start_col = #buf_filenames
-          local highlight_end = start_col + #buf.filename + 4
+      if buf.filename ~= "" then -- This filters out temporary buffers such as oils buffers (without a name)
+        local highlight_start = #other_filenames
+        local highlight_end = highlight_start + #buf.filename + 4
 
-          buf_filenames = buf_filenames .. "  " .. buf.filename
+        other_filenames = other_filenames .. "  " .. buf.filename
 
-          if is_modified then
-            buf_filenames = buf_filenames .. " +"
-            highlight_end = highlight_end + 2
-          end
-
-
-          buf_filenames = buf_filenames .. "   "
-          table.insert(highlights, { start = start_col, stop = highlight_end })
-          i = i + 1
+        if vim.api.nvim_get_option_value("modified", { buf = buf.buf_id }) then
+          other_filenames = other_filenames .. " +"
+          highlight_end = highlight_end + 2
         end
+
+
+        other_filenames = other_filenames .. "   "
+        table.insert(other_highlights, { start = highlight_start, stop = highlight_end })
+        i = i + 1
+      end
+    end
+
+    local highlights = {}
+    local buf_filenames = (" "):rep(M._config.padding_left)
+
+    local width = vim.api.nvim_win_get_width(window.win_id)
+    local space = (" "):rep(width - M._config.padding_left - #current_file - 1 - #other_filenames -
+      M._config.padding_right)
+
+    if M._config.space == "left" then
+      buf_filenames = buf_filenames .. space
+    end
+
+    if M._config.current_file == "left" then
+      local start_col = #buf_filenames
+      buf_filenames = buf_filenames .. current_file
+      local highlight_end = start_col + #current_file
+      table.insert(highlights, { start = start_col, stop = highlight_end })
+      buf_filenames = buf_filenames .. " "
+
+      if M._config.space == "center" then
+        buf_filenames = buf_filenames .. space
       end
     end
 
 
-    if i > M._config.max_tabs then
-      local start_col = #buf_filenames
-      buf_filenames = buf_filenames .. "[ ... ]"
-      table.insert(highlights, { start = start_col, stop = start_col + start_col + 7 })
-    else
-      buf_filenames = buf_filenames:sub(1, -2)
+    local others_starting = #buf_filenames
+    buf_filenames = buf_filenames .. other_filenames
+    for _, h in ipairs(other_highlights) do
+      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop })
     end
 
-    local width = vim.api.nvim_win_get_width(window.win_id)
-    buf_filenames = buf_filenames .. (" "):rep(width - #buf_filenames)
+
+    if M._config.current_file == "right" then
+      if M._config.space == "center" then
+        buf_filenames = buf_filenames .. space
+      end
+
+      local start_col = #buf_filenames
+      buf_filenames = buf_filenames .. current_file
+      local highlight_end = start_col + #current_file
+      table.insert(highlights, { start = start_col, stop = highlight_end })
+      buf_filenames = buf_filenames .. " "
+    end
+
+    -- if i > M._config.max_tabs then
+    --   local start_col = #buf_filenames
+    --   buf_filenames = buf_filenames .. "[ ... ]"
+    --   table.insert(highlights, { start = start_col, stop = start_col + 7 })
+    -- else
+    --   buf_filenames = buf_filenames:sub(1, -2)
+    -- end
+
+    if M._config.space == "right" then
+      buf_filenames = buf_filenames .. space
+    end
 
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
     cfg.width = width
-
-
 
     vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarBackground", 0, 0, -1)
     if vim.api.nvim_win_is_valid(window.float.win_id) then
