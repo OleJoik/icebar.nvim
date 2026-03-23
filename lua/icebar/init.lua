@@ -1,4 +1,4 @@
----@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string }
+---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string, last_active: number }
 ---@alias FloatState { win_id: integer, buffer: integer }
 ---@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
@@ -36,6 +36,7 @@ M._config = {
   focused_tab_guibg = "#2b4c52",
   focused_underline = nil, -- color or nil; falls back to underline
 }
+M._active_counter = 0
 
 M._skip_filetypes = {}
 
@@ -162,7 +163,7 @@ function M.register(win_id, buf_id)
   if M._state.windows[w] == nil then
     local float = M._create_float(win_id)
     M._state.windows[w] = {
-      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name } },
+      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name, last_active = 0 } },
       float = float,
       win_id = win_id
     }
@@ -173,7 +174,19 @@ function M.register(win_id, buf_id)
       order = existing.order
     end
 
-    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = order, path = full_name }
+    local last_active = 0
+    if existing ~= nil then
+      last_active = existing.last_active or 0
+    end
+
+    M._state.windows[w].buffers[b] = {
+      buf_id = buf_id,
+      active = true,
+      filename = filename,
+      order = order,
+      path = full_name,
+      last_active = last_active
+    }
   end
 
   M._set_active(w, b)
@@ -216,6 +229,8 @@ function M._set_active(w, b)
   end
 
   M._state.windows[w].buffers[b].active = true
+  M._active_counter = M._active_counter + 1
+  M._state.windows[w].buffers[b].last_active = M._active_counter
 
   if M._config.reorder_on_focus then
     M._state.windows[w].buffers[b].order = 0
@@ -599,24 +614,30 @@ function M._find_next_active_buffer(win_id)
   end
 
   ---@type string?
-  local lowest_order_buf_id = nil
+  local most_recent_buf_id = nil
 
   ---@type BufferState?
-  local lowest_buf = nil
+  local most_recent_buf = nil
 
   for id, buf in pairs(M._state.windows[w].buffers) do
-    if lowest_buf == nil then
-      lowest_buf = buf
-      lowest_order_buf_id = id
+    if most_recent_buf == nil then
+      most_recent_buf = buf
+      most_recent_buf_id = id
     else
-      if buf.order < lowest_buf.order then
-        lowest_buf = buf
-        lowest_order_buf_id = id
+      local current_last_active = most_recent_buf.last_active or 0
+      local candidate_last_active = buf.last_active or 0
+
+      if candidate_last_active > current_last_active then
+        most_recent_buf = buf
+        most_recent_buf_id = id
+      elseif candidate_last_active == current_last_active and buf.order < most_recent_buf.order then
+        most_recent_buf = buf
+        most_recent_buf_id = id
       end
     end
   end
 
-  return lowest_order_buf_id
+  return most_recent_buf_id
 end
 
 return M
