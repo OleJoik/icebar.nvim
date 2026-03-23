@@ -252,6 +252,7 @@ function M.render()
 
     local current_file = ""
     local current_file_highlight = nil
+    local active_buf_id = nil
     if #bufs > 0 then
       local current_index = 1
       for idx, buf in ipairs(bufs) do
@@ -262,7 +263,10 @@ function M.render()
       end
 
       local first = bufs[current_index]
-      table.remove(bufs, current_index)
+      active_buf_id = first.buf_id
+      if M._config.reorder_on_focus then
+        table.remove(bufs, current_index)
+      end
 
       local cwd = vim.fn.getcwd()
       local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
@@ -285,14 +289,16 @@ function M.render()
         error("current_file_display must be 'path' or 'name'")
       end
 
-      current_file = "  " .. current_label
+      if M._config.reorder_on_focus then
+        current_file = "  " .. current_label
 
-      if is_modified then
-        current_file = current_file .. " +"
+        if is_modified then
+          current_file = current_file .. " +"
+        end
+
+        current_file = current_file .. "  "
+        current_file_highlight = "IceBarFocusedTab"
       end
-
-      current_file = current_file .. "  "
-      current_file_highlight = "IceBarFocusedTab"
     end
 
     table.sort(bufs, function(x, y)
@@ -325,7 +331,12 @@ function M.render()
 
 
         other_filenames = other_filenames .. "   "
-        table.insert(other_highlights, { start = highlight_start, stop = highlight_end })
+        local group = "IceBarTab"
+        if active_buf_id ~= nil and buf.buf_id == active_buf_id then
+          group = "IceBarFocusedTab"
+        end
+
+        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group })
         i = i + 1
       end
     end
@@ -344,7 +355,7 @@ function M.render()
       buf_filenames = buf_filenames .. space
     end
 
-    if M._config.current_file == "left" then
+    if current_file ~= "" and M._config.current_file == "left" then
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
@@ -360,11 +371,11 @@ function M.render()
     local others_starting = #buf_filenames
     buf_filenames = buf_filenames .. other_filenames
     for _, h in ipairs(other_highlights) do
-      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = "IceBarTab" })
+      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = h.group })
     end
 
 
-    if M._config.current_file == "right" then
+    if current_file ~= "" and M._config.current_file == "right" then
       if M._config.space == "center" then
         buf_filenames = buf_filenames .. space
       end

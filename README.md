@@ -87,7 +87,7 @@ vim.keymap.set("n", "<C-x>", function() require("icebar").close_buf() end, opts)
 ```lua
 require("icebar").setup({
   current_file_display = "name", -- show only filename for active tab
-  reorder_on_focus = false,      -- keep tab order stable when switching buffers
+  reorder_on_focus = false,      -- keep tab order stable; focused file stays in-place in tab list
   newest_other_file = "right",   -- newest non-focused file appears to the right
 })
 ```
