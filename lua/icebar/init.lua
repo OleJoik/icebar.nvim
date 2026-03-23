@@ -215,19 +215,28 @@ function M.render()
   for _, window in pairs(M._state.windows) do
     local bufs = {}
     for _, buf in pairs(window.buffers) do
-      table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
+      table.insert(bufs, {
+        buf_id = buf.buf_id,
+        order = buf.order,
+        filename = buf.filename,
+        path = buf.path,
+        active = buf.active
+      })
     end
 
-    table.sort(bufs, function(x, y)
-      return x.order < y.order
-    end)
-
-
-    local current_file = nil
+    local current_file = ""
     local current_file_highlight = nil
     if #bufs > 0 then
-      local first = bufs[1]
-      table.remove(bufs, 1)
+      local current_index = 1
+      for idx, buf in ipairs(bufs) do
+        if buf.active then
+          current_index = idx
+          break
+        end
+      end
+
+      local first = bufs[current_index]
+      table.remove(bufs, current_index)
 
       local cwd = vim.fn.getcwd()
       local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
@@ -299,8 +308,11 @@ function M.render()
     local buf_filenames = (" "):rep(M._config.padding_left)
 
     local width = vim.api.nvim_win_get_width(window.win_id)
-    local space = (" "):rep(width - M._config.padding_left - #current_file - 1 - #other_filenames -
-      M._config.padding_right)
+    local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - M._config.padding_right
+    if space_len < 0 then
+      space_len = 0
+    end
+    local space = (" "):rep(space_len)
 
     if M._config.space == "left" then
       buf_filenames = buf_filenames .. space
