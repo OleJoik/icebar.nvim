@@ -126,19 +126,14 @@ end
 function M._create_float(win_id)
   local float_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, {})
-  local col_offset = M._config.float_col_offset or 0
-  local width = vim.api.nvim_win_get_width(win_id) - col_offset
-  if width < 1 then
-    width = 1
-  end
 
   local float_win = vim.api.nvim_open_win(float_buf, false, {
     relative = "win",
     win = win_id,
     anchor = "NW",
     row = M._config.float_row_offset,
-    col = col_offset,
-    width = width,
+    col = 0,
+    width = vim.api.nvim_win_get_width(win_id),
     height = 1,
     focusable = true,
     style = "minimal",
@@ -384,11 +379,7 @@ function M.render()
     local highlights = {}
     local buf_filenames = (" "):rep(M._config.padding_left)
 
-    local col_offset = M._config.float_col_offset or 0
-    local width = vim.api.nvim_win_get_width(window.win_id) - col_offset
-    if width < 1 then
-      width = 1
-    end
+    local width = vim.api.nvim_win_get_width(window.win_id)
     local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - #keymap_hint -
         M._config.padding_right
     if space_len < 0 then
