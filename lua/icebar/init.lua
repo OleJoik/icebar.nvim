@@ -303,9 +303,9 @@ function M.render()
 
     table.sort(bufs, function(x, y)
       if M._config.newest_other_file == "left" then
-        return x.order < y.order
-      elseif M._config.newest_other_file == "right" then
         return x.order > y.order
+      elseif M._config.newest_other_file == "right" then
+        return x.order < y.order
       else
         error("newest_other_file must be 'left' or 'right'")
       end
