@@ -123,6 +123,19 @@ local function _is_normal_window(win_id)
   return vim.fn.win_gettype(win_id) == ""
 end
 
+local function _window_total_width(win_id)
+  local width = vim.api.nvim_win_get_width(win_id)
+  local info = vim.fn.getwininfo(win_id)
+  if type(info) == "table" and info[1] ~= nil and type(info[1].textoff) == "number" then
+    width = width + info[1].textoff
+  end
+  if width < 1 then
+    width = 1
+  end
+
+  return width
+end
+
 function M._create_float(win_id)
   local float_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, {})
@@ -133,7 +146,7 @@ function M._create_float(win_id)
     anchor = "NW",
     row = M._config.float_row_offset,
     col = 0,
-    width = vim.api.nvim_win_get_width(win_id),
+    width = _window_total_width(win_id),
     height = 1,
     focusable = true,
     style = "minimal",
@@ -379,7 +392,7 @@ function M.render()
     local highlights = {}
     local buf_filenames = (" "):rep(M._config.padding_left)
 
-    local width = vim.api.nvim_win_get_width(window.win_id)
+    local width = _window_total_width(window.win_id)
     local space_len = width - M._config.padding_left - #current_file - #other_filenames - #keymap_hint -
         M._config.padding_right
     if space_len < 0 then
