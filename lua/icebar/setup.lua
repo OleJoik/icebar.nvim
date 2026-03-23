@@ -2,6 +2,8 @@ local M = {}
 
 function M.setup(cfg)
   local tab_hl_cmd = "highlight IceBarTab guifg=" .. cfg.tab_guifg .. " guibg=" .. cfg.tab_guibg .. " gui=bold"
+  local focused_tab_hl_cmd =
+      "highlight IceBarFocusedTab guifg=" .. cfg.focused_tab_guifg .. " guibg=" .. cfg.focused_tab_guibg .. " gui=bold"
   local tab_bg_cmd = "highlight IceBarBackground guifg=" .. cfg.tab_guibg .. " guibg=" .. cfg.bg_guibg .. " gui=bold"
 
 
@@ -9,8 +11,14 @@ function M.setup(cfg)
     tab_hl_cmd = tab_hl_cmd .. ",underline guisp=" .. cfg.underline
     tab_bg_cmd = tab_bg_cmd .. ",underline guisp=" .. cfg.underline
   end
+  if cfg.focused_underline ~= nil then
+    focused_tab_hl_cmd = focused_tab_hl_cmd .. ",underline guisp=" .. cfg.focused_underline
+  elseif cfg.underline ~= nil then
+    focused_tab_hl_cmd = focused_tab_hl_cmd .. ",underline guisp=" .. cfg.underline
+  end
 
   vim.cmd(tab_hl_cmd)
+  vim.cmd(focused_tab_hl_cmd)
   vim.cmd(tab_bg_cmd)
 
 

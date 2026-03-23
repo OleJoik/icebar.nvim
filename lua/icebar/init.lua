@@ -30,6 +30,11 @@ M._config = {
   current_file = "left",       -- left or right
   newest_other_file = "right", -- left or right
   space = "center",            -- left, right or center
+  current_file_display = "path", -- path or name
+  reorder_on_focus = true,
+  focused_tab_guifg = "#d7ffff",
+  focused_tab_guibg = "#2b4c52",
+  focused_underline = nil, -- color or nil; falls back to underline
 }
 
 M._skip_filetypes = {}
@@ -184,21 +189,23 @@ function M._set_active(w, b)
     end
   end
 
-
   M._state.windows[w].buffers[b].active = true
-  M._state.windows[w].buffers[b].order = 0
 
-  local items = {}
-  for key, value in pairs(M._state.windows[w].buffers) do
-    table.insert(items, { key = key, order = value.order })
-  end
+  if M._config.reorder_on_focus then
+    M._state.windows[w].buffers[b].order = 0
 
-  table.sort(items, function(x, y)
-    return x.order < y.order
-  end)
+    local items = {}
+    for key, value in pairs(M._state.windows[w].buffers) do
+      table.insert(items, { key = key, order = value.order })
+    end
 
-  for i, item in ipairs(items) do
-    M._state.windows[w].buffers[item.key].order = i
+    table.sort(items, function(x, y)
+      return x.order < y.order
+    end)
+
+    for i, item in ipairs(items) do
+      M._state.windows[w].buffers[item.key].order = i
+    end
   end
 
   M.render()
@@ -217,6 +224,7 @@ function M.render()
 
 
     local current_file = nil
+    local current_file_highlight = nil
     if #bufs > 0 then
       local first = bufs[1]
       table.remove(bufs, 1)
@@ -235,13 +243,21 @@ function M.render()
       end
 
       local is_modified = vim.api.nvim_get_option_value("modified", { buf = first.buf_id })
-      current_file = "  " .. cwd_basename .. rel_path
+      local current_label = cwd_basename .. rel_path
+      if M._config.current_file_display == "name" then
+        current_label = first.filename
+      elseif M._config.current_file_display ~= "path" then
+        error("current_file_display must be 'path' or 'name'")
+      end
+
+      current_file = "  " .. current_label
 
       if is_modified then
         current_file = current_file .. " +"
       end
 
       current_file = current_file .. "  "
+      current_file_highlight = "IceBarFocusedTab"
     end
 
     table.sort(bufs, function(x, y)
@@ -294,7 +310,7 @@ function M.render()
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
-      table.insert(highlights, { start = start_col, stop = highlight_end })
+      table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
       buf_filenames = buf_filenames .. " "
 
       if M._config.space == "center" then
@@ -306,7 +322,7 @@ function M.render()
     local others_starting = #buf_filenames
     buf_filenames = buf_filenames .. other_filenames
     for _, h in ipairs(other_highlights) do
-      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop })
+      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = "IceBarTab" })
     end
 
 
@@ -318,7 +334,7 @@ function M.render()
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
-      table.insert(highlights, { start = start_col, stop = highlight_end })
+      table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
       buf_filenames = buf_filenames .. " "
     end
 
@@ -342,7 +358,8 @@ function M.render()
     if vim.api.nvim_win_is_valid(window.float.win_id) then
       vim.api.nvim_win_set_config(window.float.win_id, cfg)
       for _, hl in ipairs(highlights) do
-        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarTab", 0, hl.start, hl.stop)
+        local group = hl.group or "IceBarTab"
+        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, group, 0, hl.start, hl.stop)
       end
     end
   end

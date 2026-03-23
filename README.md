@@ -55,6 +55,11 @@ Lazy:
   current_file = "left",       -- left or right
   newest_other_file = "right", -- left or right
   space = "center",            -- left, right or center
+  current_file_display = "path", -- path or name
+  reorder_on_focus = true,
+  focused_tab_guifg = "#d7ffff",
+  focused_tab_guibg = "#2b4c52",
+  focused_underline = nil, -- color or nil; falls back to underline
 }
 ```
 
@@ -74,6 +79,15 @@ vim.keymap.set("n", "<leader>l", function() move_buf("right") end, opts)
 
 vim.keymap.set("n", "<Tab>", function() require("icebar").toggle_buffer_in_window() end, opts)
 vim.keymap.set("n", "<C-x>", function() require("icebar").close_buf() end, opts)
+```
+
+## Example custom behavior
+
+```lua
+require("icebar").setup({
+  current_file_display = "name", -- show only filename for active tab
+  reorder_on_focus = false,      -- keep tab order stable when switching buffers
+})
 ```
 
 ## Development
