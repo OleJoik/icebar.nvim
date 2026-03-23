@@ -82,8 +82,10 @@ vim.keymap.set("n", "<leader>l", function() move_buf("right") end, opts)
 
 vim.keymap.set("n", "<Tab>", function() require("icebar").toggle_buffer_in_window() end, opts)
 vim.keymap.set("n", "<C-x>", function() require("icebar").close_buf() end, opts)
-vim.keymap.set("n", "<leader>tp", function() require("icebar").toggle_path_mode() end, opts)
 ```
+
+> `path_toggle_keymap` is configured through `require("icebar").setup({...})` and is mapped automatically.
+> You do not need an extra `vim.keymap.set` for path mode unless you want custom behavior.
 
 ## Example custom behavior
 
