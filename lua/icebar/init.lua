@@ -35,8 +35,11 @@ M._config = {
   focused_tab_guifg = "#d7ffff",
   focused_tab_guibg = "#2b4c52",
   focused_underline = nil, -- color or nil; falls back to underline
+  path_toggle_keymap = nil,
+  show_path_toggle_hint = true,
 }
 M._active_counter = 0
+M._path_only_mode = false
 
 M._skip_filetypes = {}
 
@@ -73,6 +76,11 @@ end
 
 function M.state()
   return M._state
+end
+
+local function _path_relative_to_cwd(path)
+  local oil_path = vim.fn.fnamemodify(path, "%:p"):gsub("^oil://", "")
+  return vim.fn.fnamemodify(oil_path, ":.")
 end
 
 function M.is_window_registered(win_id)
@@ -279,15 +287,14 @@ function M.render()
 
       local first = bufs[current_index]
       active_buf_id = first.buf_id
-      if M._config.reorder_on_focus then
+      if M._config.reorder_on_focus or M._path_only_mode then
         table.remove(bufs, current_index)
       end
 
       local cwd = vim.fn.getcwd()
       local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
 
-      local oil_path = vim.fn.fnamemodify(first.path, '%:p'):gsub("^oil://", "")
-      local rel_path = vim.fn.fnamemodify(oil_path, ':~:.')
+      local rel_path = _path_relative_to_cwd(first.path)
 
       if not rel_path:match("^[/~]") and rel_path ~= "" then
         rel_path = "/" .. rel_path
@@ -304,7 +311,11 @@ function M.render()
         error("current_file_display must be 'path' or 'name'")
       end
 
-      if M._config.reorder_on_focus then
+      if M._path_only_mode then
+        current_label = _path_relative_to_cwd(first.path)
+      end
+
+      if M._config.reorder_on_focus or M._path_only_mode then
         current_file = "  " .. current_label
 
         if is_modified then
@@ -314,6 +325,10 @@ function M.render()
         current_file = current_file .. "  "
         current_file_highlight = "IceBarFocusedTab"
       end
+    end
+
+    if M._path_only_mode then
+      bufs = {}
     end
 
     table.sort(bufs, function(x, y)
@@ -356,11 +371,17 @@ function M.render()
       end
     end
 
+    local keymap_hint = ""
+    if M._config.show_path_toggle_hint and M._config.path_toggle_keymap ~= nil and M._config.path_toggle_keymap ~= "" then
+      keymap_hint = " [" .. M._config.path_toggle_keymap .. "] "
+    end
+
     local highlights = {}
     local buf_filenames = (" "):rep(M._config.padding_left)
 
     local width = vim.api.nvim_win_get_width(window.win_id)
-    local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - M._config.padding_right
+    local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - #keymap_hint -
+        M._config.padding_right
     if space_len < 0 then
       space_len = 0
     end
@@ -414,6 +435,8 @@ function M.render()
       buf_filenames = buf_filenames .. space
     end
 
+    buf_filenames = buf_filenames .. keymap_hint
+
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
     cfg.width = width
@@ -427,6 +450,11 @@ function M.render()
       end
     end
   end
+end
+
+function M.toggle_path_mode()
+  M._path_only_mode = not M._path_only_mode
+  M.render()
 end
 
 function M.buf_wipeout(buf_id)

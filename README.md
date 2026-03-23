@@ -61,6 +61,8 @@ Lazy:
   focused_tab_guifg = "#d7ffff",
   focused_tab_guibg = "#2b4c52",
   focused_underline = nil, -- color or nil; falls back to underline
+  path_toggle_keymap = nil, -- e.g. "<leader>tp" to toggle path-only mode
+  show_path_toggle_hint = true, -- show the configured keymap on the bar
 }
 ```
 
@@ -80,6 +82,7 @@ vim.keymap.set("n", "<leader>l", function() move_buf("right") end, opts)
 
 vim.keymap.set("n", "<Tab>", function() require("icebar").toggle_buffer_in_window() end, opts)
 vim.keymap.set("n", "<C-x>", function() require("icebar").close_buf() end, opts)
+vim.keymap.set("n", "<leader>tp", function() require("icebar").toggle_path_mode() end, opts)
 ```
 
 ## Example custom behavior
@@ -89,6 +92,7 @@ require("icebar").setup({
   current_file_display = "name", -- show only filename for active tab
   reorder_on_focus = false,      -- keep tab order stable; focused file stays in-place in tab list
   newest_other_file = "right",   -- newest non-focused file appears to the right
+  path_toggle_keymap = "<leader>tp", -- toggles all tabs off and shows cwd-relative path
 })
 ```
 

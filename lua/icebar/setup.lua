@@ -40,6 +40,16 @@ function M.setup(cfg)
     require("icebar").move_current_buf("right")
   end, {})
 
+  vim.api.nvim_create_user_command("IceBarTogglePathMode", function()
+    require("icebar").toggle_path_mode()
+  end, {})
+
+  if cfg.path_toggle_keymap ~= nil and cfg.path_toggle_keymap ~= "" then
+    vim.keymap.set("n", cfg.path_toggle_keymap, function()
+      require("icebar").toggle_path_mode()
+    end, { noremap = true, silent = true, desc = "IceBar: toggle path mode" })
+  end
+
   vim.api.nvim_create_autocmd({ "VimEnter", "BufWinEnter" }, {
     callback = function()
       if vim.bo.buftype == "" then
