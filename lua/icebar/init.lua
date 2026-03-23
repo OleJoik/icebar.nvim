@@ -1,4 +1,4 @@
----@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string }
+---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string, last_active: number }
 ---@alias FloatState { win_id: integer, buffer: integer }
 ---@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
@@ -30,11 +30,20 @@ M._config = {
   current_file = "left",       -- left or right
   newest_other_file = "right", -- left or right
   space = "center",            -- left, right or center
+  current_file_display = "path", -- path or name
+  reorder_on_focus = true,
+  focused_tab_guifg = "#d7ffff",
+  focused_tab_guibg = "#2b4c52",
+  focused_underline = nil, -- color or nil; falls back to underline
 }
+M._active_counter = 0
 
 M._skip_filetypes = {}
 
 function M.setup(user_config)
+  if user_config ~= nil and user_config.current_file_focus ~= nil and user_config.current_file_display == nil then
+    user_config.current_file_display = user_config.current_file_focus
+  end
   M._config = vim.tbl_deep_extend("force", M._config, user_config or {})
   require("icebar.setup").setup(M._config)
 
@@ -43,6 +52,23 @@ function M.setup(user_config)
   for _, ft in ipairs(M._config.skip_filetypes) do
     M._skip_filetypes[ft] = true
   end
+end
+
+local function _next_buffer_order(win_id)
+  local w = tostring(win_id)
+  local win = M._state.windows[w]
+  if win == nil then
+    return 0
+  end
+
+  local max_order = -1
+  for _, buf in pairs(win.buffers) do
+    if buf.order > max_order then
+      max_order = buf.order
+    end
+  end
+
+  return max_order + 1
 end
 
 function M.state()
@@ -137,12 +163,30 @@ function M.register(win_id, buf_id)
   if M._state.windows[w] == nil then
     local float = M._create_float(win_id)
     M._state.windows[w] = {
-      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name } },
+      buffers = { [b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name, last_active = 0 } },
       float = float,
       win_id = win_id
     }
   else
-    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name }
+    local existing = M._state.windows[w].buffers[b]
+    local order = _next_buffer_order(win_id)
+    if existing ~= nil then
+      order = existing.order
+    end
+
+    local last_active = 0
+    if existing ~= nil then
+      last_active = existing.last_active or 0
+    end
+
+    M._state.windows[w].buffers[b] = {
+      buf_id = buf_id,
+      active = true,
+      filename = filename,
+      order = order,
+      path = full_name,
+      last_active = last_active
+    }
   end
 
   M._set_active(w, b)
@@ -184,21 +228,25 @@ function M._set_active(w, b)
     end
   end
 
-
   M._state.windows[w].buffers[b].active = true
-  M._state.windows[w].buffers[b].order = 0
+  M._active_counter = M._active_counter + 1
+  M._state.windows[w].buffers[b].last_active = M._active_counter
 
-  local items = {}
-  for key, value in pairs(M._state.windows[w].buffers) do
-    table.insert(items, { key = key, order = value.order })
-  end
+  if M._config.reorder_on_focus then
+    M._state.windows[w].buffers[b].order = 0
 
-  table.sort(items, function(x, y)
-    return x.order < y.order
-  end)
+    local items = {}
+    for key, value in pairs(M._state.windows[w].buffers) do
+      table.insert(items, { key = key, order = value.order })
+    end
 
-  for i, item in ipairs(items) do
-    M._state.windows[w].buffers[item.key].order = i
+    table.sort(items, function(x, y)
+      return x.order < y.order
+    end)
+
+    for i, item in ipairs(items) do
+      M._state.windows[w].buffers[item.key].order = i
+    end
   end
 
   M.render()
@@ -208,18 +256,32 @@ function M.render()
   for _, window in pairs(M._state.windows) do
     local bufs = {}
     for _, buf in pairs(window.buffers) do
-      table.insert(bufs, { buf_id = buf.buf_id, order = buf.order, filename = buf.filename, path = buf.path })
+      table.insert(bufs, {
+        buf_id = buf.buf_id,
+        order = buf.order,
+        filename = buf.filename,
+        path = buf.path,
+        active = buf.active
+      })
     end
 
-    table.sort(bufs, function(x, y)
-      return x.order < y.order
-    end)
-
-
-    local current_file = nil
+    local current_file = ""
+    local current_file_highlight = nil
+    local active_buf_id = nil
     if #bufs > 0 then
-      local first = bufs[1]
-      table.remove(bufs, 1)
+      local current_index = 1
+      for idx, buf in ipairs(bufs) do
+        if buf.active then
+          current_index = idx
+          break
+        end
+      end
+
+      local first = bufs[current_index]
+      active_buf_id = first.buf_id
+      if M._config.reorder_on_focus then
+        table.remove(bufs, current_index)
+      end
 
       local cwd = vim.fn.getcwd()
       local cwd_basename = vim.fn.fnamemodify(cwd, ':t')
@@ -235,20 +297,30 @@ function M.render()
       end
 
       local is_modified = vim.api.nvim_get_option_value("modified", { buf = first.buf_id })
-      current_file = "  " .. cwd_basename .. rel_path
-
-      if is_modified then
-        current_file = current_file .. " +"
+      local current_label = cwd_basename .. rel_path
+      if M._config.current_file_display == "name" then
+        current_label = first.filename
+      elseif M._config.current_file_display ~= "path" then
+        error("current_file_display must be 'path' or 'name'")
       end
 
-      current_file = current_file .. "  "
+      if M._config.reorder_on_focus then
+        current_file = "  " .. current_label
+
+        if is_modified then
+          current_file = current_file .. " +"
+        end
+
+        current_file = current_file .. "  "
+        current_file_highlight = "IceBarFocusedTab"
+      end
     end
 
     table.sort(bufs, function(x, y)
       if M._config.newest_other_file == "left" then
-        return x.order < y.order
-      elseif M._config.newest_other_file == "right" then
         return x.order > y.order
+      elseif M._config.newest_other_file == "right" then
+        return x.order < y.order
       else
         error("newest_other_file must be 'left' or 'right'")
       end
@@ -274,7 +346,12 @@ function M.render()
 
 
         other_filenames = other_filenames .. "   "
-        table.insert(other_highlights, { start = highlight_start, stop = highlight_end })
+        local group = "IceBarTab"
+        if active_buf_id ~= nil and buf.buf_id == active_buf_id then
+          group = "IceBarFocusedTab"
+        end
+
+        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group })
         i = i + 1
       end
     end
@@ -283,18 +360,21 @@ function M.render()
     local buf_filenames = (" "):rep(M._config.padding_left)
 
     local width = vim.api.nvim_win_get_width(window.win_id)
-    local space = (" "):rep(width - M._config.padding_left - #current_file - 1 - #other_filenames -
-      M._config.padding_right)
+    local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - M._config.padding_right
+    if space_len < 0 then
+      space_len = 0
+    end
+    local space = (" "):rep(space_len)
 
     if M._config.space == "left" then
       buf_filenames = buf_filenames .. space
     end
 
-    if M._config.current_file == "left" then
+    if current_file ~= "" and M._config.current_file == "left" then
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
-      table.insert(highlights, { start = start_col, stop = highlight_end })
+      table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
       buf_filenames = buf_filenames .. " "
 
       if M._config.space == "center" then
@@ -306,11 +386,11 @@ function M.render()
     local others_starting = #buf_filenames
     buf_filenames = buf_filenames .. other_filenames
     for _, h in ipairs(other_highlights) do
-      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop })
+      table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = h.group })
     end
 
 
-    if M._config.current_file == "right" then
+    if current_file ~= "" and M._config.current_file == "right" then
       if M._config.space == "center" then
         buf_filenames = buf_filenames .. space
       end
@@ -318,7 +398,7 @@ function M.render()
       local start_col = #buf_filenames
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
-      table.insert(highlights, { start = start_col, stop = highlight_end })
+      table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
       buf_filenames = buf_filenames .. " "
     end
 
@@ -342,7 +422,8 @@ function M.render()
     if vim.api.nvim_win_is_valid(window.float.win_id) then
       vim.api.nvim_win_set_config(window.float.win_id, cfg)
       for _, hl in ipairs(highlights) do
-        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarTab", 0, hl.start, hl.stop)
+        local group = hl.group or "IceBarTab"
+        vim.api.nvim_buf_add_highlight(window.float.buffer, -1, group, 0, hl.start, hl.stop)
       end
     end
   end
@@ -533,24 +614,30 @@ function M._find_next_active_buffer(win_id)
   end
 
   ---@type string?
-  local lowest_order_buf_id = nil
+  local most_recent_buf_id = nil
 
   ---@type BufferState?
-  local lowest_buf = nil
+  local most_recent_buf = nil
 
   for id, buf in pairs(M._state.windows[w].buffers) do
-    if lowest_buf == nil then
-      lowest_buf = buf
-      lowest_order_buf_id = id
+    if most_recent_buf == nil then
+      most_recent_buf = buf
+      most_recent_buf_id = id
     else
-      if buf.order < lowest_buf.order then
-        lowest_buf = buf
-        lowest_order_buf_id = id
+      local current_last_active = most_recent_buf.last_active or 0
+      local candidate_last_active = buf.last_active or 0
+
+      if candidate_last_active > current_last_active then
+        most_recent_buf = buf
+        most_recent_buf_id = id
+      elseif candidate_last_active == current_last_active and buf.order < most_recent_buf.order then
+        most_recent_buf = buf
+        most_recent_buf_id = id
       end
     end
   end
 
-  return lowest_order_buf_id
+  return most_recent_buf_id
 end
 
 return M
