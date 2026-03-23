@@ -1,4 +1,5 @@
 local M = {}
+M._registered_path_toggle_keymap = nil
 
 function M.setup(cfg)
   local tab_hl_cmd = "highlight IceBarTab guifg=" .. cfg.tab_guifg .. " guibg=" .. cfg.tab_guibg .. " gui=bold"
@@ -39,6 +40,22 @@ function M.setup(cfg)
   vim.api.nvim_create_user_command("IceBarMoveCurrentBufRight", function()
     require("icebar").move_current_buf("right")
   end, {})
+
+  vim.api.nvim_create_user_command("IceBarTogglePathMode", function()
+    require("icebar").toggle_path_mode()
+  end, {})
+
+  if M._registered_path_toggle_keymap ~= nil and M._registered_path_toggle_keymap ~= cfg.path_toggle_keymap then
+    pcall(vim.keymap.del, "n", M._registered_path_toggle_keymap)
+    M._registered_path_toggle_keymap = nil
+  end
+
+  if cfg.path_toggle_keymap ~= nil and cfg.path_toggle_keymap ~= "" then
+    vim.keymap.set("n", cfg.path_toggle_keymap, function()
+      require("icebar").toggle_path_mode()
+    end, { noremap = true, silent = true, desc = "IceBar: toggle path mode" })
+    M._registered_path_toggle_keymap = cfg.path_toggle_keymap
+  end
 
   vim.api.nvim_create_autocmd({ "VimEnter", "BufWinEnter" }, {
     callback = function()
