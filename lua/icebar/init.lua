@@ -40,6 +40,9 @@ M._config = {
 M._skip_filetypes = {}
 
 function M.setup(user_config)
+  if user_config ~= nil and user_config.current_file_focus ~= nil and user_config.current_file_display == nil then
+    user_config.current_file_display = user_config.current_file_focus
+  end
   M._config = vim.tbl_deep_extend("force", M._config, user_config or {})
   require("icebar.setup").setup(M._config)
 
@@ -48,6 +51,23 @@ function M.setup(user_config)
   for _, ft in ipairs(M._config.skip_filetypes) do
     M._skip_filetypes[ft] = true
   end
+end
+
+local function _next_buffer_order(win_id)
+  local w = tostring(win_id)
+  local win = M._state.windows[w]
+  if win == nil then
+    return 0
+  end
+
+  local max_order = -1
+  for _, buf in pairs(win.buffers) do
+    if buf.order > max_order then
+      max_order = buf.order
+    end
+  end
+
+  return max_order + 1
 end
 
 function M.state()
@@ -147,7 +167,13 @@ function M.register(win_id, buf_id)
       win_id = win_id
     }
   else
-    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = 0, path = full_name }
+    local existing = M._state.windows[w].buffers[b]
+    local order = _next_buffer_order(win_id)
+    if existing ~= nil then
+      order = existing.order
+    end
+
+    M._state.windows[w].buffers[b] = { buf_id = buf_id, active = true, filename = filename, order = order, path = full_name }
   end
 
   M._set_active(w, b)
