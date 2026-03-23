@@ -380,7 +380,7 @@ function M.render()
     local buf_filenames = (" "):rep(M._config.padding_left)
 
     local width = vim.api.nvim_win_get_width(window.win_id)
-    local space_len = width - M._config.padding_left - #current_file - 1 - #other_filenames - #keymap_hint -
+    local space_len = width - M._config.padding_left - #current_file - #other_filenames - #keymap_hint -
         M._config.padding_right
     if space_len < 0 then
       space_len = 0
@@ -437,6 +437,12 @@ function M.render()
 
     buf_filenames = buf_filenames .. keymap_hint
     buf_filenames = buf_filenames .. (" "):rep(M._config.padding_right)
+    local missing_right = width - #buf_filenames
+    if missing_right > 0 then
+      buf_filenames = buf_filenames .. (" "):rep(missing_right)
+    elseif missing_right < 0 then
+      buf_filenames = buf_filenames:sub(1, width)
+    end
 
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
