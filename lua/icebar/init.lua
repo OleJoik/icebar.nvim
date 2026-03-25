@@ -414,13 +414,17 @@ function M.render()
     end
 
     local highlights = {}
-    local buf_filenames = (" "):rep(M._config.padding_left)
+    local effective_padding_left = M._config.padding_left - _window_textoff(window.win_id)
+    if effective_padding_left < 0 then
+      effective_padding_left = 0
+    end
+    local buf_filenames = (" "):rep(effective_padding_left)
 
     local width = _window_total_width(window.win_id) - M._config.float_col_offset
     if width < 1 then
       width = 1
     end
-    local space_len = width - M._config.padding_left - #current_file - #other_filenames - #keymap_hint -
+    local space_len = width - effective_padding_left - #current_file - #other_filenames - #keymap_hint -
         M._config.padding_right
     if space_len < 0 then
       space_len = 0
