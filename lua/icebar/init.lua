@@ -267,21 +267,28 @@ end
 
 -- TODO: Assumes the window buffer is registered.. Will give index errors if not
 function M._set_active(w, b)
-  for _, win in pairs(M._state.windows) do
-    for _, buf in pairs(win.buffers) do
-      buf.active = false
-    end
+  local target_window = M._state.windows[w]
+  if target_window == nil then
+    return
   end
 
-  M._state.windows[w].buffers[b].active = true
+  for _, buf in pairs(target_window.buffers) do
+    buf.active = false
+  end
+
+  if target_window.buffers[b] == nil then
+    return
+  end
+
+  target_window.buffers[b].active = true
   M._active_counter = M._active_counter + 1
-  M._state.windows[w].buffers[b].last_active = M._active_counter
+  target_window.buffers[b].last_active = M._active_counter
 
   if M._config.reorder_on_focus then
-    M._state.windows[w].buffers[b].order = 0
+    target_window.buffers[b].order = 0
 
     local items = {}
-    for key, value in pairs(M._state.windows[w].buffers) do
+    for key, value in pairs(target_window.buffers) do
       table.insert(items, { key = key, order = value.order })
     end
 
@@ -290,7 +297,7 @@ function M._set_active(w, b)
     end)
 
     for i, item in ipairs(items) do
-      M._state.windows[w].buffers[item.key].order = i
+      target_window.buffers[item.key].order = i
     end
   end
 
