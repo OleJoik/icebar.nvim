@@ -1,26 +1,53 @@
 local M = {}
 M._registered_path_toggle_keymap = nil
+M._augroup = vim.api.nvim_create_augroup("IceBarSetup", { clear = true })
 
-function M.setup(cfg)
-  local tab_hl_cmd = "highlight IceBarTab guifg=" .. cfg.tab_guifg .. " guibg=" .. cfg.tab_guibg .. " gui=bold"
-  local focused_tab_hl_cmd =
-      "highlight IceBarFocusedTab guifg=" .. cfg.focused_tab_guifg .. " guibg=" .. cfg.focused_tab_guibg .. " gui=bold"
-  local tab_bg_cmd = "highlight IceBarBackground guifg=" .. cfg.tab_guibg .. " guibg=" .. cfg.bg_guibg .. " gui=bold"
-
+local function _apply_highlights(cfg)
+  local tab = {
+    fg = cfg.tab_guifg,
+    bg = cfg.tab_guibg,
+    bold = true,
+  }
+  local focused = {
+    fg = cfg.focused_tab_guifg,
+    bg = cfg.focused_tab_guibg,
+    bold = true,
+  }
+  local background = {
+    fg = cfg.tab_guibg,
+    bg = cfg.bg_guibg,
+    bold = true,
+  }
 
   if cfg.underline ~= nil then
-    tab_hl_cmd = tab_hl_cmd .. ",underline guisp=" .. cfg.underline
-    tab_bg_cmd = tab_bg_cmd .. ",underline guisp=" .. cfg.underline
+    tab.underline = true
+    tab.sp = cfg.underline
+    background.underline = true
+    background.sp = cfg.underline
   end
   if cfg.focused_underline ~= nil then
-    focused_tab_hl_cmd = focused_tab_hl_cmd .. ",underline guisp=" .. cfg.focused_underline
+    focused.underline = true
+    focused.sp = cfg.focused_underline
   elseif cfg.underline ~= nil then
-    focused_tab_hl_cmd = focused_tab_hl_cmd .. ",underline guisp=" .. cfg.underline
+    focused.underline = true
+    focused.sp = cfg.underline
   end
 
-  vim.cmd(tab_hl_cmd)
-  vim.cmd(focused_tab_hl_cmd)
-  vim.cmd(tab_bg_cmd)
+  vim.api.nvim_set_hl(0, "IceBarTab", tab)
+  vim.api.nvim_set_hl(0, "IceBarFocusedTab", focused)
+  vim.api.nvim_set_hl(0, "IceBarBackground", background)
+end
+
+function M.setup(cfg)
+  _apply_highlights(cfg)
+
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = M._augroup,
+    callback = function()
+      _apply_highlights(cfg)
+      require("icebar").render()
+    end,
+  })
 
 
   vim.api.nvim_create_user_command("IceBar", function()
