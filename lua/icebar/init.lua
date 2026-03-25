@@ -136,17 +136,41 @@ local function _window_total_width(win_id)
   return width
 end
 
+local function _window_textoff(win_id)
+  local info = vim.fn.getwininfo(win_id)
+  if type(info) == "table" and info[1] ~= nil and type(info[1].textoff) == "number" then
+    return info[1].textoff
+  end
+
+  return 0
+end
+
+local function _float_layout(win_id)
+  local textoff = _window_textoff(win_id)
+  local col = -textoff + M._config.float_col_offset
+  local width = _window_total_width(win_id) - M._config.float_col_offset
+  if width < 1 then
+    width = 1
+  end
+
+  return {
+    col = col,
+    width = width,
+  }
+end
+
 function M._create_float(win_id)
   local float_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(float_buf, 0, -1, false, {})
+  local layout = _float_layout(win_id)
 
   local float_win = vim.api.nvim_open_win(float_buf, false, {
     relative = "win",
     win = win_id,
     anchor = "NW",
     row = M._config.float_row_offset,
-    col = 0,
-    width = _window_total_width(win_id),
+    col = layout.col,
+    width = layout.width,
     height = 1,
     focusable = true,
     style = "minimal",
@@ -392,7 +416,10 @@ function M.render()
     local highlights = {}
     local buf_filenames = (" "):rep(M._config.padding_left)
 
-    local width = _window_total_width(window.win_id)
+    local width = _window_total_width(window.win_id) - M._config.float_col_offset
+    if width < 1 then
+      width = 1
+    end
     local space_len = width - M._config.padding_left - #current_file - #other_filenames - #keymap_hint -
         M._config.padding_right
     if space_len < 0 then
@@ -459,7 +486,9 @@ function M.render()
 
     vim.api.nvim_buf_set_lines(window.float.buffer, 0, -1, false, { buf_filenames })
     local cfg = vim.api.nvim_win_get_config(window.float.win_id)
-    cfg.width = width
+    local layout = _float_layout(window.win_id)
+    cfg.col = layout.col
+    cfg.width = layout.width
 
     vim.api.nvim_buf_add_highlight(window.float.buffer, -1, "IceBarBackground", 0, 0, -1)
     if vim.api.nvim_win_is_valid(window.float.win_id) then
