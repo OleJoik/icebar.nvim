@@ -63,6 +63,8 @@ Lazy:
   focused_underline = nil, -- color or nil; falls back to underline
   path_toggle_keymap = nil, -- e.g. "<leader>tp" to toggle path-only mode
   show_path_toggle_hint = true, -- show the configured keymap on the bar
+  show_close_button = false, -- show a small clickable close button on each tab
+  close_button_symbol = "×", -- symbol used for clickable close buttons
 }
 ```
 

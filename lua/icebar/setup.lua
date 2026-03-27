@@ -112,6 +112,9 @@ function M.setup(cfg)
   vim.api.nvim_create_autocmd({ "WinEnter" }, {
     callback = function()
       local win_id = vim.api.nvim_get_current_win()
+      if require("icebar").handle_float_focus(win_id) then
+        return
+      end
       local buf_id = vim.api.nvim_get_current_buf()
       require("icebar").activate(win_id, buf_id)
     end,

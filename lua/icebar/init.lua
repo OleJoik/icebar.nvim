@@ -1,6 +1,7 @@
 ---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string, last_active: number }
 ---@alias FloatState { win_id: integer, buffer: integer }
----@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil }
+---@alias ClickTarget { start: integer, stop: integer, action: "close", buf_id: integer }
+---@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil, click_targets: ClickTarget[]|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
 local M = {}
 
@@ -37,6 +38,8 @@ M._config = {
   focused_underline = nil, -- color or nil; falls back to underline
   path_toggle_keymap = nil,
   show_path_toggle_hint = true,
+  show_close_button = false,
+  close_button_symbol = "×",
 }
 M._active_counter = 0
 M._path_only_mode = false
@@ -123,6 +126,16 @@ local function _is_normal_window(win_id)
   return vim.fn.win_gettype(win_id) == ""
 end
 
+local function _normal_windows_count()
+  local count = 0
+  for _, win_id in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if _is_normal_window(win_id) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
 local function _window_total_width(win_id)
   local width = vim.api.nvim_win_get_width(win_id)
   local info = vim.fn.getwininfo(win_id)
@@ -185,7 +198,55 @@ function M._create_float(win_id)
   vim.api.nvim_set_option_value("cursorcolumn", false, { win = float_win })
   vim.api.nvim_set_option_value("spell", false, { win = float_win })
   vim.api.nvim_set_option_value("wrap", false, { win = float_win })
+
+  vim.keymap.set("n", "<LeftMouse>", function()
+    require("icebar").handle_float_click()
+  end, { buffer = float_buf, noremap = true, silent = true, nowait = true })
+
   return { win_id = float_win, buffer = float_buf }
+end
+
+function M.handle_float_click()
+  local mouse = vim.fn.getmousepos()
+  local float_win_id = mouse.winid
+  local col = mouse.column - 1
+
+  if float_win_id == nil or col < 0 then
+    return
+  end
+
+  for _, window in pairs(M._state.windows) do
+    if window.float ~= nil and window.float.win_id == float_win_id then
+      for _, target in ipairs(window.click_targets or {}) do
+        if col >= target.start and col < target.stop then
+          if target.action == "close" then
+            M.close_buf(window.win_id, target.buf_id)
+          end
+          return
+        end
+      end
+      return
+    end
+  end
+end
+
+function M.handle_float_focus(win_id)
+  local target_win_id = win_id or vim.api.nvim_get_current_win()
+  for _, window in pairs(M._state.windows) do
+    if window.float ~= nil and window.float.win_id == target_win_id then
+      M.handle_float_click()
+      if vim.api.nvim_win_is_valid(window.win_id) then
+        vim.schedule(function()
+          if vim.api.nvim_win_is_valid(window.win_id) then
+            vim.api.nvim_set_current_win(window.win_id)
+          end
+        end)
+      end
+      return true
+    end
+  end
+
+  return false
 end
 
 function M.register(win_id, buf_id)
@@ -255,14 +316,20 @@ end
 function M.close_win(win_id)
   local w = tostring(win_id)
   if M._state.windows[w] == nil then
-    return
+    return false
   end
+
+  if _normal_windows_count() <= 1 then
+    return false
+  end
+
   if M._state.windows[w].float ~= nil then
     vim.api.nvim_win_close(M._state.windows[w].float.win_id, true)
   end
   M._state.windows[w] = nil
 
-  vim.api.nvim_win_close(win_id, false)
+  local ok = pcall(vim.api.nvim_win_close, win_id, false)
+  return ok
 end
 
 -- TODO: Assumes the window buffer is registered.. Will give index errors if not
@@ -306,6 +373,7 @@ end
 
 function M.render()
   for _, window in pairs(M._state.windows) do
+    window.click_targets = {}
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       table.insert(bufs, {
@@ -366,6 +434,10 @@ function M.render()
           current_file = current_file .. " +"
         end
 
+        if M._config.show_close_button then
+          current_file = current_file .. " " .. M._config.close_button_symbol
+        end
+
         current_file = current_file .. "  "
         current_file_highlight = "IceBarFocusedTab"
       end
@@ -394,15 +466,20 @@ function M.render()
 
       if buf.filename ~= "" then -- This filters out temporary buffers such as oils buffers (without a name)
         local highlight_start = #other_filenames
-        local highlight_end = highlight_start + #buf.filename + 4
+        local tab_label = buf.filename
+        local highlight_end = highlight_start + #tab_label + 4
 
-        other_filenames = other_filenames .. "  " .. buf.filename
+        other_filenames = other_filenames .. "  " .. tab_label
 
         if vim.api.nvim_get_option_value("modified", { buf = buf.buf_id }) then
           other_filenames = other_filenames .. " +"
           highlight_end = highlight_end + 2
         end
 
+        if M._config.show_close_button then
+          other_filenames = other_filenames .. " " .. M._config.close_button_symbol
+          highlight_end = highlight_end + #M._config.close_button_symbol + 1
+        end
 
         other_filenames = other_filenames .. "   "
         local group = "IceBarTab"
@@ -410,7 +487,7 @@ function M.render()
           group = "IceBarFocusedTab"
         end
 
-        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group })
+        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group, buf_id = buf.buf_id })
         i = i + 1
       end
     end
@@ -447,6 +524,17 @@ function M.render()
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
       table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
+      if M._config.show_close_button and active_buf_id ~= nil then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_start = highlight_end - 2 - #close_button_span
+        local close_stop = close_start + #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = active_buf_id,
+        })
+      end
       buf_filenames = buf_filenames .. " "
 
       if M._config.space == "center" then
@@ -459,6 +547,17 @@ function M.render()
     buf_filenames = buf_filenames .. other_filenames
     for _, h in ipairs(other_highlights) do
       table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = h.group })
+      if M._config.show_close_button then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_stop = others_starting + h.stop - 2
+        local close_start = close_stop - #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = h.buf_id,
+        })
+      end
     end
 
 
@@ -471,6 +570,17 @@ function M.render()
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
       table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
+      if M._config.show_close_button and active_buf_id ~= nil then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_start = highlight_end - 2 - #close_button_span
+        local close_stop = close_start + #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = active_buf_id,
+        })
+      end
       buf_filenames = buf_filenames .. " "
     end
 
@@ -557,7 +667,21 @@ function M.close_buf(win_id, buf_id)
   end
 
   if is_window_empty then
-    vim.cmd("q")
+    if not M.close_win(_win_id) then
+      local current_win = vim.api.nvim_get_current_win()
+      local should_restore = current_win ~= _win_id and vim.api.nvim_win_is_valid(current_win)
+      if vim.api.nvim_win_is_valid(_win_id) then
+        vim.api.nvim_set_current_win(_win_id)
+      end
+
+      vim.cmd("enew")
+      local replacement_buf = vim.api.nvim_get_current_buf()
+      M.register(_win_id, replacement_buf)
+
+      if should_restore and vim.api.nvim_win_is_valid(current_win) then
+        vim.api.nvim_set_current_win(current_win)
+      end
+    end
     return
   end
 
