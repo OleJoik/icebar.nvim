@@ -651,7 +651,7 @@ function M.close_buf(win_id, buf_id)
   end
 
   if is_window_empty then
-    vim.cmd("q")
+    M.close_win(_win_id)
     return
   end
 
