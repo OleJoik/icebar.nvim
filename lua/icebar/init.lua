@@ -1,6 +1,7 @@
 ---@alias BufferState { buf_id: integer, active: boolean, filename: string, order: number, path: string, last_active: number }
 ---@alias FloatState { win_id: integer, buffer: integer }
----@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil }
+---@alias ClickTarget { start: integer, stop: integer, action: "close", buf_id: integer }
+---@alias WindowState { win_id: integer, buffers: table<string, BufferState|nil>, float: FloatState|nil, click_targets: ClickTarget[]|nil }
 ---@alias State { windows: table<string, WindowState|nil> }
 local M = {}
 
@@ -37,6 +38,8 @@ M._config = {
   focused_underline = nil, -- color or nil; falls back to underline
   path_toggle_keymap = nil,
   show_path_toggle_hint = true,
+  show_close_button = false,
+  close_button_symbol = "×",
 }
 M._active_counter = 0
 M._path_only_mode = false
@@ -185,7 +188,36 @@ function M._create_float(win_id)
   vim.api.nvim_set_option_value("cursorcolumn", false, { win = float_win })
   vim.api.nvim_set_option_value("spell", false, { win = float_win })
   vim.api.nvim_set_option_value("wrap", false, { win = float_win })
+
+  vim.keymap.set("n", "<LeftMouse>", function()
+    require("icebar").handle_float_click()
+  end, { buffer = float_buf, noremap = true, silent = true, nowait = true })
+
   return { win_id = float_win, buffer = float_buf }
+end
+
+function M.handle_float_click()
+  local mouse = vim.fn.getmousepos()
+  local float_win_id = mouse.winid
+  local col = mouse.column - 1
+
+  if float_win_id == nil or col < 0 then
+    return
+  end
+
+  for _, window in pairs(M._state.windows) do
+    if window.float ~= nil and window.float.win_id == float_win_id then
+      for _, target in ipairs(window.click_targets or {}) do
+        if col >= target.start and col < target.stop then
+          if target.action == "close" then
+            M.close_buf(window.win_id, target.buf_id)
+          end
+          return
+        end
+      end
+      return
+    end
+  end
 end
 
 function M.register(win_id, buf_id)
@@ -306,6 +338,7 @@ end
 
 function M.render()
   for _, window in pairs(M._state.windows) do
+    window.click_targets = {}
     local bufs = {}
     for _, buf in pairs(window.buffers) do
       table.insert(bufs, {
@@ -366,6 +399,10 @@ function M.render()
           current_file = current_file .. " +"
         end
 
+        if M._config.show_close_button then
+          current_file = current_file .. " " .. M._config.close_button_symbol
+        end
+
         current_file = current_file .. "  "
         current_file_highlight = "IceBarFocusedTab"
       end
@@ -394,15 +431,20 @@ function M.render()
 
       if buf.filename ~= "" then -- This filters out temporary buffers such as oils buffers (without a name)
         local highlight_start = #other_filenames
-        local highlight_end = highlight_start + #buf.filename + 4
+        local tab_label = buf.filename
+        local highlight_end = highlight_start + #tab_label + 4
 
-        other_filenames = other_filenames .. "  " .. buf.filename
+        other_filenames = other_filenames .. "  " .. tab_label
 
         if vim.api.nvim_get_option_value("modified", { buf = buf.buf_id }) then
           other_filenames = other_filenames .. " +"
           highlight_end = highlight_end + 2
         end
 
+        if M._config.show_close_button then
+          other_filenames = other_filenames .. " " .. M._config.close_button_symbol
+          highlight_end = highlight_end + #M._config.close_button_symbol + 1
+        end
 
         other_filenames = other_filenames .. "   "
         local group = "IceBarTab"
@@ -410,7 +452,7 @@ function M.render()
           group = "IceBarFocusedTab"
         end
 
-        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group })
+        table.insert(other_highlights, { start = highlight_start, stop = highlight_end, group = group, buf_id = buf.buf_id })
         i = i + 1
       end
     end
@@ -447,6 +489,17 @@ function M.render()
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
       table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
+      if M._config.show_close_button and active_buf_id ~= nil then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_start = highlight_end - 2 - #close_button_span
+        local close_stop = close_start + #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = active_buf_id,
+        })
+      end
       buf_filenames = buf_filenames .. " "
 
       if M._config.space == "center" then
@@ -459,6 +512,17 @@ function M.render()
     buf_filenames = buf_filenames .. other_filenames
     for _, h in ipairs(other_highlights) do
       table.insert(highlights, { start = others_starting + h.start, stop = others_starting + h.stop, group = h.group })
+      if M._config.show_close_button then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_stop = others_starting + h.stop - 2
+        local close_start = close_stop - #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = h.buf_id,
+        })
+      end
     end
 
 
@@ -471,6 +535,17 @@ function M.render()
       buf_filenames = buf_filenames .. current_file
       local highlight_end = start_col + #current_file
       table.insert(highlights, { start = start_col, stop = highlight_end, group = current_file_highlight })
+      if M._config.show_close_button and active_buf_id ~= nil then
+        local close_button_span = " " .. M._config.close_button_symbol
+        local close_start = highlight_end - 2 - #close_button_span
+        local close_stop = close_start + #close_button_span
+        table.insert(window.click_targets, {
+          start = close_start,
+          stop = close_stop,
+          action = "close",
+          buf_id = active_buf_id,
+        })
+      end
       buf_filenames = buf_filenames .. " "
     end
 
