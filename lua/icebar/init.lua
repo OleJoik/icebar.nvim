@@ -220,6 +220,25 @@ function M.handle_float_click()
   end
 end
 
+function M.handle_float_focus(win_id)
+  local target_win_id = win_id or vim.api.nvim_get_current_win()
+  for _, window in pairs(M._state.windows) do
+    if window.float ~= nil and window.float.win_id == target_win_id then
+      M.handle_float_click()
+      if vim.api.nvim_win_is_valid(window.win_id) then
+        vim.schedule(function()
+          if vim.api.nvim_win_is_valid(window.win_id) then
+            vim.api.nvim_set_current_win(window.win_id)
+          end
+        end)
+      end
+      return true
+    end
+  end
+
+  return false
+end
+
 function M.register(win_id, buf_id)
   if _is_normal_window(win_id) == false then
     return
