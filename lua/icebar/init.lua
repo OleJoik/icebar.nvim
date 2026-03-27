@@ -126,6 +126,16 @@ local function _is_normal_window(win_id)
   return vim.fn.win_gettype(win_id) == ""
 end
 
+local function _normal_windows_count()
+  local count = 0
+  for _, win_id in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if _is_normal_window(win_id) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
 local function _window_total_width(win_id)
   local width = vim.api.nvim_win_get_width(win_id)
   local info = vim.fn.getwininfo(win_id)
@@ -306,14 +316,20 @@ end
 function M.close_win(win_id)
   local w = tostring(win_id)
   if M._state.windows[w] == nil then
-    return
+    return false
   end
+
+  if _normal_windows_count() <= 1 then
+    return false
+  end
+
   if M._state.windows[w].float ~= nil then
     vim.api.nvim_win_close(M._state.windows[w].float.win_id, true)
   end
   M._state.windows[w] = nil
 
-  vim.api.nvim_win_close(win_id, false)
+  local ok = pcall(vim.api.nvim_win_close, win_id, false)
+  return ok
 end
 
 -- TODO: Assumes the window buffer is registered.. Will give index errors if not
@@ -651,7 +667,21 @@ function M.close_buf(win_id, buf_id)
   end
 
   if is_window_empty then
-    M.close_win(_win_id)
+    if not M.close_win(_win_id) then
+      local current_win = vim.api.nvim_get_current_win()
+      local should_restore = current_win ~= _win_id and vim.api.nvim_win_is_valid(current_win)
+      if vim.api.nvim_win_is_valid(_win_id) then
+        vim.api.nvim_set_current_win(_win_id)
+      end
+
+      vim.cmd("enew")
+      local replacement_buf = vim.api.nvim_get_current_buf()
+      M.register(_win_id, replacement_buf)
+
+      if should_restore and vim.api.nvim_win_is_valid(current_win) then
+        vim.api.nvim_set_current_win(current_win)
+      end
+    end
     return
   end
 
